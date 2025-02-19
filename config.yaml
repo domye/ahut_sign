@@ -1,6 +1,6 @@
 ## 用户信息配置
 ## 格式：
-## - username: 学号
+##   username: 学号
 ##   password: 密码
 ##   email: 邮箱（可选）
 ##   dorm: 宿舍楼
