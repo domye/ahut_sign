@@ -7,6 +7,7 @@
 ##  2025.2.19
 
 - 更新注释
+- 用户信息从外部yaml文件配置，提升便捷性，将js文件和yaml文件放在同一文件夹即可
 - 头文件增加 `User-Agent` 和 `FlySource-sign`，使其能正常签到
 - 邮箱增加验证，若为空则不调用
 
@@ -30,6 +31,7 @@ npm -v //检查node和npm版本
 ```
 npm install axios
 npm install nodemailer
+npm install js-yaml
 ```
 
 实现在服务器上定时执行打卡脚本：
