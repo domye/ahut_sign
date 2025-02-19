@@ -6,8 +6,10 @@
 ##  2025.2.19
 
 - 更新注释
-- 头文件增加 `User-Agent` 和 `FlySource-sign`，使其neng
+- 头文件增加 `User-Agent` 和 `FlySource-sign`，使其能正常签到
 - 邮箱增加验证，若为空则不调用
+
+
 
 ## 配置
 
