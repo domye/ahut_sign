@@ -145,11 +145,10 @@ const signIn = async (token, user, retryCount = 0) => {
   const base64 = btoa(t); 
   const signature = `${second_md5}1.${base64}`;
 
-
-    const currentDate = getCurrentDate(); // 获取当前日期
-    const currentTime = getCurrentTime(); // 获取当前时间
-    const currentWeekday = getCurrentWeekday(); // 获取当前星期几
-    const dormLocation = dormLocations[user.dorm]; // 获取用户宿舍的经纬度坐标
+  const currentDate = getCurrentDate(); // 获取当前日期
+  const currentTime = getCurrentTime(); // 获取当前时间
+  const currentWeekday = getCurrentWeekday(); // 获取当前星期几
+  const dormLocation = dormLocations[user.dorm]; // 获取用户宿舍的经纬度坐标
     if (!dormLocation) {
       console.error(`未找到宿舍: ${user.dorm} 的位置信息`);
       return;
