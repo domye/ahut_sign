@@ -4,11 +4,10 @@ const crypto = require("crypto"); // 引入 crypto 模块用于 MD5 加密
 const yaml = require('js-yaml');
 const fs = require('fs');
 
-// 读取配置文件
   const fileContents = fs.readFileSync('./config.yaml', 'utf8');
   const data = yaml.load(fileContents);
 
-// 解析后的数据
+  // 解析后的数据
   const dormLocations = data.dormLocations;
   const users = data.users;
 
@@ -138,21 +137,21 @@ const signIn = async (token, user, retryCount = 0) => {
 
   // 获取签名
   const log_url = '/api/flySource-yxgl/dormSignRecord/add?sign=';
-  const jwt_prefix = token.slice(0, 10);
-  const t = Date.now(); 
-  const first_md5 =md5(t+jwt_prefix);
+  const token_10 = token.slice(0, 10);
+  const time = Date.now(); 
+  const first_md5 =md5(time+token_10);
   const second_md5 = md5(log_url + first_md5);
-  const base64 = btoa(t); 
+  const base64 = btoa(time); 
   const signature = `${second_md5}1.${base64}`;
 
   const currentDate = getCurrentDate(); // 获取当前日期
   const currentTime = getCurrentTime(); // 获取当前时间
   const currentWeekday = getCurrentWeekday(); // 获取当前星期几
   const dormLocation = dormLocations[user.dorm]; // 获取用户宿舍的经纬度坐标
-    if (!dormLocation) {
-      console.error(`未找到宿舍: ${user.dorm} 的位置信息`);
-      return;
-    }
+  if (!dormLocation) {
+    console.error(`未找到宿舍: ${user.dorm} 的位置信息`);
+    return;
+  }
 
   // 生成动态的签到位置
   const dynamicLocation = getDynamicLocation(
@@ -230,13 +229,24 @@ const signIn = async (token, user, retryCount = 0) => {
   }
 };
 
+// 延迟函数
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// 批量签到函数
 const signInAllUsers = async () => {
+  const signInPromises = [];
+  let count = 0;
+
   for (const user of users) {
-    const token = await getToken(user.username, user.password); // 获取 Token
-    if (token) {
-      await signIn(token, user); // 签到
+    signInPromises.push(getToken(user.username, user.password).then(token => signIn(token, user)));
+    count++;
+
+    if (count % 10 === 0) {
+      await delay(2000); // 每签到10个用户后暂停2秒
     }
   }
+
+  await Promise.all(signInPromises);
 };
 
 // 执行签到
