@@ -5,11 +5,11 @@ const yaml = require('js-yaml');
 const fs = require('fs');
 
   const fileContents = fs.readFileSync('./config.yaml', 'utf8');
-  const data = yaml.load(fileContents);
+  const config = yaml.load(fileContents);
 
   // 解析后的数据
-  const dormLocations = data.dormLocations;
-  const users = data.users;
+  const dormLocations = config.dormLocations;
+  const users = config.users;
 
 // MD5 加密函数
 const md5Encrypt = (password) => {
@@ -93,15 +93,15 @@ const sendEmail = async (to, subject, text) => {
   if (!to) return;
 
   let transporter = nodemailer.createTransport({
-    service: data.email.service,
+    service: config.email.service,
     auth: {
-      user: data.email.user,
-      pass: data.email.pass,
+      user: config.email.user,
+      pass: config.email.pass,
     },
   });
 
   let mailOptions = {
-    from: data.email.user,
+    from: config.email.user,
     to: to,
     subject: subject,
     text: text,
@@ -131,19 +131,22 @@ const signIn = async (token, user, retryCount = 0) => {
     console.error(`${user.username} 的 Token 未获取到，无法进行签到`);
     return;
   }
+
+// 加密函数
   function md5(buffer) {
       return crypto.createHash('md5').update(buffer).digest('hex');
   }
 
-  // 获取签名
-  const log_url = '/api/flySource-yxgl/dormSignRecord/add?sign=';
-  const token_10 = token.slice(0, 10);
-  const time = Date.now(); 
-  const first_md5 =md5(time+token_10);
-  const second_md5 = md5(log_url + first_md5);
-  const base64 = btoa(time); 
-  const signature = `${second_md5}1.${base64}`;
+// 获取签名
+const log_url = '/api/flySource-yxgl/dormSignRecord/add?sign=';
+const token_10 = token.slice(0, 10);
+const time = Date.now(); 
+const first_md5 =md5(time+token_10);
+const second_md5 = md5(log_url + first_md5);
+const base64 = btoa(time); 
+const signature = `${second_md5}1.${base64}`;
 
+//获取信息
   const currentDate = getCurrentDate(); // 获取当前日期
   const currentTime = getCurrentTime(); // 获取当前时间
   const currentWeekday = getCurrentWeekday(); // 获取当前星期几
@@ -171,8 +174,8 @@ const signIn = async (token, user, retryCount = 0) => {
     signDate: currentDate, // 使用当前日期
     signTime: currentTime, // 使用当前时间
     signWeek: currentWeekday, // 使用当前星期几
-      scanCode: "",
-    
+    scanCode: "",
+    roomId: user.roomId,
   };
 
 
