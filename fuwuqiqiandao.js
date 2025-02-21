@@ -245,7 +245,7 @@ const signInAllUsers = async () => {
     count++;
 
     if (count % 10 === 0) {
-      await delay(2000); // 每签到10个用户后暂停2秒
+      await delay(1000); // 每签到5个用户后暂停1秒
     }
   }
 
