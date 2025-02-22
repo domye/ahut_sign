@@ -198,8 +198,8 @@ const signature = `${second_md5}1.${base64}`;
       console.log(`${user.username} 签到成功`);
       await sendEmail(
         user.email,
-        "打卡成功",
-        `${user.username} 打卡成功: ${data.msg} 时间：${currentDate} ${currentTime}`
+        "晚寝自动签到成功",
+        `${user.username} 签到成功: ${data.msg} 时间：${currentDate} ${currentTime}`
       );
     } else {
       console.error(`${user.username} 签到失败:`, response.data);
@@ -211,8 +211,8 @@ const signature = `${second_md5}1.${base64}`;
         console.error(`${user.username} 签到失败，达到最大重试次数`);
         await sendEmail(
           user.email,
-          "打卡失败",
-          `${user.username} 打卡失败: ${data.msg}`
+          "签到失败",
+          `${user.username} 签到失败: ${data.msg}`
         );
       }
     }
