@@ -101,7 +101,7 @@ const sendEmail = async (to, subject, text) => {
   });
 
   let mailOptions = {
-    from: config.email.user,
+    from: config.email.from,
     to: to,
     subject: subject,
     text: text,
@@ -232,24 +232,13 @@ const signature = `${second_md5}1.${base64}`;
   }
 };
 
-// 延迟函数
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// 批量签到函数
 const signInAllUsers = async () => {
-  const signInPromises = [];
-  let count = 0;
-
   for (const user of users) {
-    signInPromises.push(getToken(user.username, user.password).then(token => signIn(token, user)));
-    count++;
-
-    if (count % 10 === 0) {
-      await delay(1000); // 每签到5个用户后暂停1秒
+    const token = await getToken(user.username, user.password); // 获取 Token
+    if (token) {
+      await signIn(token, user); // 签到
     }
   }
-
-  await Promise.all(signInPromises);
 };
 
 // 执行签到
