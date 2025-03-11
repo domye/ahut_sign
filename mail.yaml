@@ -1,0 +1,11 @@
+## 邮箱配置
+## 格式：
+## service: 邮箱服务商（163/qq/126/...）
+## user: 邮箱账号
+## pass: 邮箱独立密码
+## from: 发送者昵称和邮箱(需要和user保持一致)
+email:
+  service: ##"qq"
+  user: ##123456@qq.com
+  pass: ##123456
+  from: ##'"发送者昵称" <123456@qq.com>'

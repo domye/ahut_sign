@@ -1,15 +1,17 @@
 const axios = require("axios");
 const nodemailer = require("nodemailer"); //发送邮箱
 const crypto = require("crypto"); // 引入 crypto 模块用于 MD5 加密
-const yaml = require('js-yaml');
-const fs = require('fs');
+const yaml = require("js-yaml");
+const fs = require("fs");
 
-  const fileContents = fs.readFileSync('./config.yaml', 'utf8');
-  const config = yaml.load(fileContents);
+// 读取配置文件
+const user = yaml.load(fs.readFileSync("./user.yaml", "utf8"));
+const dorm = yaml.load(fs.readFileSync("./dorm.yaml", "utf8"));
+const mail = yaml.load(fs.readFileSync("./mail.yaml", "utf8"));
 
-  // 解析后的数据
-  const dormLocations = config.dormLocations;
-  const users = config.users;
+// 解析后的数据
+const dormLocations = dorm.dormLocations;
+const users = user.users;
 
 // MD5 加密函数
 const md5Encrypt = (password) => {
@@ -93,15 +95,15 @@ const sendEmail = async (to, subject, text) => {
   if (!to) return;
 
   let transporter = nodemailer.createTransport({
-    service: config.email.service,
+    service: mail.email.service,
     auth: {
-      user: config.email.user,
-      pass: config.email.pass,
+      user: mail.email.user,
+      pass: mail.email.pass,
     },
   });
 
   let mailOptions = {
-    from: config.email.from,
+    from: mail.email.from,
     to: to,
     subject: subject,
     text: text,
@@ -114,7 +116,6 @@ const sendEmail = async (to, subject, text) => {
     console.error(`邮件发送失败: ${error.message}`);
   }
 };
-
 
 // 生成动态经纬度的函数，微调最后两位小数
 const getDynamicLocation = (lat, lng) => {
@@ -132,21 +133,21 @@ const signIn = async (token, user, retryCount = 0) => {
     return;
   }
 
-// 加密函数
+  // 加密函数
   function md5(buffer) {
-      return crypto.createHash('md5').update(buffer).digest('hex');
+    return crypto.createHash("md5").update(buffer).digest("hex");
   }
 
-// 获取签名
-const log_url = '/api/flySource-yxgl/dormSignRecord/add?sign=';
-const token_10 = token.slice(0, 10);
-const time = Date.now(); 
-const first_md5 =md5(time+token_10);
-const second_md5 = md5(log_url + first_md5);
-const base64 = btoa(time); 
-const signature = `${second_md5}1.${base64}`;
+  // 获取签名
+  const log_url = "/api/flySource-yxgl/dormSignRecord/add?sign=";
+  const token_10 = token.slice(0, 10);
+  const time = Date.now();
+  const first_md5 = md5(time + token_10);
+  const second_md5 = md5(log_url + first_md5);
+  const base64 = btoa(time);
+  const signature = `${second_md5}1.${base64}`;
 
-//获取信息
+  //获取信息
   const currentDate = getCurrentDate(); // 获取当前日期
   const currentTime = getCurrentTime(); // 获取当前时间
   const currentWeekday = getCurrentWeekday(); // 获取当前星期几
@@ -178,7 +179,6 @@ const signature = `${second_md5}1.${base64}`;
     roomId: user.roomId,
   };
 
-
   try {
     const response = await axios.post(
       "https://xskq.ahut.edu.cn/api/flySource-yxgl/dormSignRecord/add",
@@ -187,12 +187,13 @@ const signature = `${second_md5}1.${base64}`;
         headers: {
           "FlySource-Auth": `bearer ${token}`,
           "Content-Type": "application/json;charset=UTF-8",
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ',
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ",
           "FlySource-sign": signature,
         },
       }
     );
-    
+
     const data = response.data;
     if (response.status === 200) {
       console.log(`${user.username} 签到成功`);

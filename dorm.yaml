@@ -1,34 +1,9 @@
-## 用户信息配置
-## 格式：
-##   username: 学号
-##   password: 密码
-##   email: 邮箱（可选）
-##   dorm: 宿舍楼
-##   roomId: 宿舍编码
-users:
-  - username: ##123456
-    password: ##123456
-    email: ## 123456@qq.com
-    dorm: ## 5A
-    roomId: ##123456
-
-## 邮箱配置
-## 格式：
-## service: 邮箱服务商（163/qq/126/...）
-## user: 邮箱账号
-## pass: 邮箱独立密码
-## from: 发送者昵称和邮箱(需要和user保持一致)
-email:
-  service: qq
-  user: ##123456@qq.com
-  pass: ##123456
-  from: ##'"发送者昵称" <123456@qq.com>'
-
 ## 宿舍楼坐标配置
 ## 格式：
 ## "宿舍楼名称":
 ##   lat: 纬度
 ##   lng: 经度
+
 dormLocations:
   "1号楼":
     lat: 31.69037
