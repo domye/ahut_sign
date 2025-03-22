@@ -2,12 +2,13 @@
 ## 格式：
 ##   username: 学号
 ##   password: 密码
-##   email: 邮箱（可选）
 ##   dorm: 宿舍楼
-##   roomId: 宿舍编码
 users:
   - username: ##123456
     password: ##123456
-    email: ## 123456@qq.com
     dorm: ## 5A
-    roomId: ##123456
+
+  - username: ##123456
+    password: ##123456
+    dorm: ## 5A
+
