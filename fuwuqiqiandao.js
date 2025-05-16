@@ -19,7 +19,22 @@ const mail = yaml.load(
 const dormLocations = dorm.dormLocations;
 const users = user.users;
 
-const MAX_RETRY_COUNT = 2;
+const MAX_RETRY_COUNT = 2; // 最大重试次数
+const termId = "766e47d0401a47016f41278e73b10f82"; //任务ID
+const url1 = "https://xskq.ahut.edu.cn/api/flySource-auth/oauth/token"; //获取token的url
+const url2 =
+	"https://xskq.ahut.edu.cn/api/flySource-base/wechat/getWechatMpConfig?configUrl=https%253A%252F%252Fxskq.ahut.edu.cn%252Fwise%252Fpages%252Fssgl%252Fdormsign%253FtaskId%253D" +
+	termId +
+	"%2526autoSign%253D1%2526scanSign%253D0%2526userId%253D"; //获取微信二次验证的url
+const url3 =
+	"https://xskq.ahut.edu.cn/api/flySource-yxgl/dormSignRecord/add?sign="; //签到url
+const url4 =
+	"https://xskq.ahut.edu.cn/wise/pages/ssgl/dormsign?taskId=" +
+	termId +
+	"&autoSign=1&scanSign=0&userId="; //返回的url
+const authorization =
+	"Basic Zmx5c291cmNlX3dpc2VfYXBwOkRBNzg4YXNkVURqbmFzZF9mbHlzb3VyY2VfZHNkYWREQUlVaXV3cWU="; //请求头
+const sign = "2910bccaf179bd40dfa446dc2dec3e721.MTc0NzEyODU3MDI1Ng=="; //签名
 
 // MD5 加密函数
 const md5Encrypt = (password) => {
@@ -36,7 +51,7 @@ const getToken = async (username, password, retryCount = 0) => {
 	try {
 		const encryptedPassword = md5Encrypt(password);
 		const response = await axios.post(
-			"https://xskq.ahut.edu.cn/api/flySource-auth/oauth/token",
+			url1,
 			new URLSearchParams({
 				tenantId: "000000",
 				username: username,
@@ -47,9 +62,7 @@ const getToken = async (username, password, retryCount = 0) => {
 			}),
 			{
 				headers: {
-					Authorization:
-						"Basic Zmx5c291cmNlX3dpc2VfYXBwOkRBNzg4YXNkVURqbmFzZF9mbHlzb3VyY2VfZHNkYWREQUlVaXV3cWU=",
-					"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+					Authorization: authorization,
 				},
 			}
 		);
@@ -96,35 +109,25 @@ const signIn = async (token, user) => {
 				dormLocation.lng
 			);
 			const payload = createPayload(user, lat, lng);
-			let sign = "2910bccaf179bd40dfa446dc2dec3e721.MTc0NzEyODU3MDI1Ng==";
-			let url =
-				"https://xskq.ahut.edu.cn/api/flySource-base/wechat/getWechatMpConfig?configUrl=https%253A%252F%252Fxskq.ahut.edu.cn%252Fwise%252Fpages%252Fssgl%252Fdormsign%253FtaskId%253D766e47d0401a47016f41278e73b10f82%2526autoSign%253D1%2526scanSign%253D0%2526userId%253D" +
-				user.username;
+			let url = url2 + user.username;
 
-			let headers2 = {
-				"User-Agent":
-					"Mozilla/5.0 (Linux; Android 14; 22011211C Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.136 Mobile Safari/537.36 XWEB/1340075 MMWEBSDK/20250201 MMWEBID/3995 MicroMessenger/8.0.58.2841(0x28003A3A) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64",
-				"flysource-sign": sign,
-				authorization:
-					"Basic Zmx5c291cmNlX3dpc2VfYXBwOkRBNzg4YXNkVURqbmFzZF9mbHlzb3VyY2VfZHNkYWREQUlVaXV3cWU=",
-				"flysource-auth": "bearer " + token,
-				referer: `https://xskq.ahut.edu.cn/wise/pages/ssgl/dormsign?taskId=766e47d0401a47016f41278e73b10f82&autoSign=1&scanSign=0&userId=${user.username}`,
-			};
-
-			const wechat_sign = await axios.get(url, { headers: headers2 });
-			const response = await axios.post(
-				"https://xskq.ahut.edu.cn/api/flySource-yxgl/dormSignRecord/add",
-				payload,
-				{ headers: createHeaders(token, signature) }
-			);
+			const wechat_sign = await axios.get(url, {
+				headers: {
+					"User-Agent":
+						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+					"flysource-sign": sign,
+					authorization: authorization,
+					"flysource-auth": "bearer " + token,
+					referer: url4 + user.username,
+				},
+			});
+			const response = await axios.post(url3, payload, {
+				headers: createHeaders(token, signature),
+			});
 			if (response.status === 200 && wechat_sign.data.code == 200) {
 				result.success = true;
 				console.log(`${user.username}:签到成功`);
 				result.attempts.push(`${response.data.msg}`);
-				return result;
-			} else if (wechat_sign.data.code != 200) {
-				console.log(`${user.username}:认证失败`);
-				result.attempts.push(`微信认证失败: ${wechat_sign.data.msg}`);
 				return result;
 			}
 			result.attempts.push(`${response.data.msg}`);
@@ -132,7 +135,6 @@ const signIn = async (token, user) => {
 			result.attempts.push(`${error.message}`);
 		}
 	}
-
 	return result;
 };
 
@@ -150,7 +152,6 @@ const generateSignature = (token) => {
 // 创建请求头
 const createHeaders = (token, signature) => ({
 	"FlySource-Auth": `bearer ${token}`,
-	"Content-Type": "application/json;charset=UTF-8",
 	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 	"FlySource-sign": signature,
 });
