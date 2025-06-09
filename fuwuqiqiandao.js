@@ -19,22 +19,32 @@ const mail = yaml.load(
 const dormLocations = dorm.dormLocations;
 const users = user.users;
 
-const MAX_RETRY_COUNT = 2; // 最大重试次数
 const termId = "766e47d0401a47016f41278e73b10f82"; //任务ID
-const url1 = "https://xskq.ahut.edu.cn/api/flySource-auth/oauth/token"; //获取token的url
-const url2 =
+
+//url相关
+const url_token = "https://xskq.ahut.edu.cn/api/flySource-auth/oauth/token"; //获取token的url
+const url_wechat =
 	"https://xskq.ahut.edu.cn/api/flySource-base/wechat/getWechatMpConfig?configUrl=https%253A%252F%252Fxskq.ahut.edu.cn%252Fwise%252Fpages%252Fssgl%252Fdormsign%253FtaskId%253D" +
 	termId +
 	"%2526autoSign%253D1%2526scanSign%253D0%2526userId%253D"; //获取微信二次验证的url
-const url3 =
+const url_login =
 	"https://xskq.ahut.edu.cn/api/flySource-yxgl/dormSignRecord/add?sign="; //签到url
-const url4 =
+const url_return =
 	"https://xskq.ahut.edu.cn/wise/pages/ssgl/dormsign?taskId=" +
 	termId +
 	"&autoSign=1&scanSign=0&userId="; //返回的url
+const url_apiLog =
+	"https://xskq.ahut.edu.cn/api/flySource-base/apiLog/save?menuTitle=%E6%99%9A%E5%AF%9D%E7%AD%BE%E5%88%B0"; //apiLog的url
+
+//鉴权相关
 const authorization =
 	"Basic Zmx5c291cmNlX3dpc2VfYXBwOkRBNzg4YXNkVURqbmFzZF9mbHlzb3VyY2VfZHNkYWREQUlVaXV3cWU="; //请求头
-const sign = "2910bccaf179bd40dfa446dc2dec3e721.MTc0NzEyODU3MDI1Ng=="; //签名
+const sign_wechat = "2910bccaf179bd40dfa446dc2dec3e721.MTc0NzEyODU3MDI1Ng=="; //签名
+const sign_apiLog = "8af8062bf6d20ad77efe48b01bf74cfc1.MTc0OTI4NzQwNzk1NA=="; //apiLog的签名
+const sign_key = "/api/flySource-yxgl/dormSignRecord/add?sign=";
+
+const ua =
+	"Mozilla/5.0 (Linux; Android 14; 22011211C Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.136 Mobile Safari/537.36 XWEB/1340109 MMWEBSDK/20250201 MMWEBID/3995 MicroMessenger/8.0.58.2841(0x28003A51) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64";
 
 // MD5 加密函数
 const md5Encrypt = (password) => {
@@ -51,7 +61,7 @@ const getToken = async (username, password, retryCount = 0) => {
 	try {
 		const encryptedPassword = md5Encrypt(password);
 		const response = await axios.post(
-			url1,
+			url_token,
 			new URLSearchParams({
 				tenantId: "000000",
 				username: username,
@@ -66,7 +76,7 @@ const getToken = async (username, password, retryCount = 0) => {
 				},
 			}
 		);
-		return response.data.access_token;
+		return response.data.refresh_token;
 	} catch (error) {
 		console.error(`${username} 登录失败: ${error.message}`);
 		return getToken(username, password, retryCount + 1);
@@ -91,50 +101,80 @@ const getDynamicLocation = (lat, lng) => ({
 	lng: (parseFloat(lng) + (Math.random() * 0.01 - 0.005)).toFixed(6),
 });
 
-// 签到函数（带重试逻辑）
 const signIn = async (token, user) => {
 	const result = { username: user.username, success: false, attempts: [] };
 
-	for (let retry = 0; retry <= MAX_RETRY_COUNT; retry++) {
-		try {
-			const signature = generateSignature(token);
-			const dormLocation = dormLocations[user.dorm];
-			if (!dormLocation) {
-				result.attempts.push(`未找到宿舍位置: ${user.dorm}`);
-				break;
-			}
+	const signature = generateSignature(token);
+	const dormLocation = dormLocations[user.dorm];
+	let wechat_sign = null;
+	let apiLog = null;
 
-			const { lat, lng } = getDynamicLocation(
-				dormLocation.lat,
-				dormLocation.lng
-			);
-			const payload = createPayload(user, lat, lng);
-			let url = url2 + user.username;
-
-			const wechat_sign = await axios.get(url, {
-				headers: {
-					"User-Agent":
-						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-					"flysource-sign": sign,
-					authorization: authorization,
-					"flysource-auth": "bearer " + token,
-					referer: url4 + user.username,
-				},
-			});
-			const response = await axios.post(url3, payload, {
-				headers: createHeaders(token, signature),
-			});
-			if (response.status === 200 && wechat_sign.data.code == 200) {
-				result.success = true;
-				console.log(`${user.username}:签到成功`);
-				result.attempts.push(`${response.data.msg}`);
-				return result;
-			}
-			result.attempts.push(`${response.data.msg}`);
-		} catch (error) {
-			result.attempts.push(`${error.message}`);
-		}
+	if (!dormLocation) {
+		result.attempts.push(`未找到宿舍位置: ${user.dorm}`);
+		return result;
 	}
+
+	const { lat, lng } = getDynamicLocation(dormLocation.lat, dormLocation.lng);
+	const payload = createPayload(user, lat, lng);
+	let url = url_wechat + user.username;
+
+	try {
+		wechat_sign = await axios.get(url, {
+			headers: {
+				"User-Agent": ua,
+				"flysource-sign": sign_wechat,
+				authorization: authorization,
+				"flysource-auth": "bearer " + token,
+				referer: url_return + user.username,
+			},
+		});
+		console.log("获取微信签名成功:", wechat_sign.data.code);
+	} catch (error) {
+		console.error("获取微信签名时出错:", error);
+		result.attempts.push(`${error.message}`);
+		return result;
+	}
+
+	try {
+		apiLog = await axios.post(
+			url_apiLog,
+			{},
+			{
+				headers: {
+					"User-Agent": ua,
+					"Flysource-sign": sign_apiLog,
+					Authorization: authorization,
+					"Flysource-Auth": "bearer " + token,
+				},
+			}
+		);
+		console.log("发送API日志成功:", apiLog.data.code);
+	} catch (error) {
+		console.error("发送API日志时出错:", error);
+		result.attempts.push(`${error.message}`);
+		return result;
+	}
+
+	try {
+		const response = await axios.post(url_login, payload, {
+			headers: createHeaders(token, signature),
+		});
+		if (
+			response.status === 200 &&
+			wechat_sign.data.code == 200 &&
+			apiLog.data.code === 200 &&
+			response.data.msg.includes("成功")
+		) {
+			result.success = true;
+			console.log(`${user.username}:签到成功`);
+			result.attempts.push(`${response.data.msg}`);
+			return result;
+		}
+		result.attempts.push(`${response.data.msg}`);
+	} catch (error) {
+		result.attempts.push(`${error.message}`);
+	}
+
 	return result;
 };
 
@@ -142,23 +182,21 @@ const signIn = async (token, user) => {
 const generateSignature = (token) => {
 	const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
 	const timestamp = Date.now();
-	return `${md5(
-		`/api/flySource-yxgl/dormSignRecord/add?sign=${md5(
-			timestamp + token.slice(0, 10)
-		)}`
-	)}1.${btoa(timestamp)}`;
+	return (
+		md5(sign_key + md5(timestamp + token.slice(0, 10))) + "1." + btoa(timestamp)
+	);
 };
 
 // 创建请求头
 const createHeaders = (token, signature) => ({
 	"FlySource-Auth": `bearer ${token}`,
-	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+	"User-Agent": ua,
 	"FlySource-sign": signature,
 });
 
 // 创建负载数据
 const createPayload = (user, lat, lng) => ({
-	taskId: "766e47d0401a47016f41278e73b10f82",
+	taskId: termId,
 	signAddress: "宿舍楼",
 	locationAccuracy: 7.8,
 	signLat: lat,
@@ -170,7 +208,6 @@ const createPayload = (user, lat, lng) => ({
 	signTime: getCurrentTime(),
 	signWeek: "星期" + getCurrentWeekday(),
 	scanCode: "",
-	roomId: user.roomId,
 });
 
 // 主执行函数
