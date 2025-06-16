@@ -27,31 +27,80 @@ const url_wechat =
 	"https://xskq.ahut.edu.cn/api/flySource-base/wechat/getWechatMpConfig?configUrl=https%253A%252F%252Fxskq.ahut.edu.cn%252Fwise%252Fpages%252Fssgl%252Fdormsign%253FtaskId%253D" +
 	termId +
 	"%2526autoSign%253D1%2526scanSign%253D0%2526userId%253D"; //获取微信二次验证的url
-const url_login =
+const url_sign =
 	"https://xskq.ahut.edu.cn/api/flySource-yxgl/dormSignRecord/add?sign="; //签到url
-const url_return =
-	"https://xskq.ahut.edu.cn/wise/pages/ssgl/dormsign?taskId=" +
-	termId +
-	"&autoSign=1&scanSign=0&userId="; //返回的url
 const url_apiLog =
 	"https://xskq.ahut.edu.cn/api/flySource-base/apiLog/save?menuTitle=%E6%99%9A%E5%AF%9D%E7%AD%BE%E5%88%B0"; //apiLog的url
 
 //鉴权相关
 const authorization =
 	"Basic Zmx5c291cmNlX3dpc2VfYXBwOkRBNzg4YXNkVURqbmFzZF9mbHlzb3VyY2VfZHNkYWREQUlVaXV3cWU="; //请求头
-const sign_wechat = "2910bccaf179bd40dfa446dc2dec3e721.MTc0NzEyODU3MDI1Ng=="; //签名
-const sign_apiLog = "8af8062bf6d20ad77efe48b01bf74cfc1.MTc0OTI4NzQwNzk1NA=="; //apiLog的签名
-const sign_key = "/api/flySource-yxgl/dormSignRecord/add?sign=";
 
 const ua =
 	"Mozilla/5.0 (Linux; Android 14; 22011211C Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.136 Mobile Safari/537.36 XWEB/1340109 MMWEBSDK/20250201 MMWEBID/3995 MicroMessenger/8.0.58.2841(0x28003A51) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64";
+
+/*
+ * 工具相关
+ */
 
 // MD5 加密函数
 const md5Encrypt = (password) => {
 	return crypto.createHash("md5").update(password).digest("hex");
 };
 
-// 获取Token的函数，增加重试逻辑
+// 获取当前时间和日期
+const getCurrentTime = () =>
+	new Date().toLocaleTimeString("en-US", { hour12: false });
+const getCurrentDate = () => new Date().toISOString().split("T")[0];
+const getCurrentWeekday = () =>
+	["日", "一", "二", "三", "四", "五", "六"][new Date().getDay()];
+
+// 动态获取宿舍位置
+const getDynamicLocation = (lat, lng) => ({
+	lat: (parseFloat(lat) + (Math.random() * 0.01 - 0.005)).toFixed(6),
+	lng: (parseFloat(lng) + (Math.random() * 0.01 - 0.005)).toFixed(6),
+});
+
+// 签名生成函数
+const sign = (url, token) => {
+	const api = new URL(url).pathname + "?sign=";
+	const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
+	const timestamp = Date.now();
+	return (
+		md5(api + md5(timestamp + token.slice(0, 10))) + "1." + btoa(timestamp)
+	);
+};
+
+// 创建请求头
+const createHeaders = (token, url) => ({
+	"FlySource-Auth": `bearer ${token}`,
+	"User-Agent": ua,
+	"FlySource-sign": sign(url, token),
+});
+
+// 创建负载数据
+const createPayload = (lat, lng) => ({
+	taskId: termId,
+	locationAccuracy: 7.8,
+	signLat: lat,
+	signLng: lng,
+	signType: 0,
+	signDate: getCurrentDate(),
+	signTime: getCurrentTime(),
+	signWeek: "星期" + getCurrentWeekday(),
+});
+
+// 邮件发送器
+const transporter = nodemailer.createTransport({
+	service: mail.email.service,
+	auth: { user: mail.email.user, pass: mail.email.pass },
+});
+
+/*
+ * 签到相关
+ */
+
+// 获取Token
 const getToken = async (username, password, retryCount = 0) => {
 	if (retryCount >= 3) {
 		console.error(`${username} 登录失败: 已达到最大重试次数`);
@@ -83,28 +132,10 @@ const getToken = async (username, password, retryCount = 0) => {
 	}
 };
 
-// 工具函数：获取当前时间和日期
-const getCurrentTime = () =>
-	new Date().toLocaleTimeString("en-US", { hour12: false });
-const getCurrentDate = () => new Date().toISOString().split("T")[0];
-const getCurrentWeekday = () =>
-	["日", "一", "二", "三", "四", "五", "六"][new Date().getDay()];
-
-// 邮件发送器
-const transporter = nodemailer.createTransport({
-	service: mail.email.service,
-	auth: { user: mail.email.user, pass: mail.email.pass },
-});
-
-const getDynamicLocation = (lat, lng) => ({
-	lat: (parseFloat(lat) + (Math.random() * 0.01 - 0.005)).toFixed(6),
-	lng: (parseFloat(lng) + (Math.random() * 0.01 - 0.005)).toFixed(6),
-});
-
+// 签到函数
 const signIn = async (token, user) => {
 	const result = { username: user.username, success: false, attempts: [] };
 
-	const signature = generateSignature(token);
 	const dormLocation = dormLocations[user.dorm];
 	let wechat_sign = null;
 	let apiLog = null;
@@ -115,18 +146,12 @@ const signIn = async (token, user) => {
 	}
 
 	const { lat, lng } = getDynamicLocation(dormLocation.lat, dormLocation.lng);
-	const payload = createPayload(user, lat, lng);
-	let url = url_wechat + user.username;
-
+	const payload = createPayload(lat, lng);
+	// 获取微信签名验证
 	try {
+		const url = url_wechat + user.username;
 		wechat_sign = await axios.get(url, {
-			headers: {
-				"User-Agent": ua,
-				"flysource-sign": sign_wechat,
-				authorization: authorization,
-				"flysource-auth": "bearer " + token,
-				referer: url_return + user.username,
-			},
+			headers: createHeaders(token, url),
 		});
 		console.log("获取微信签名成功:", wechat_sign.data.code);
 	} catch (error) {
@@ -135,17 +160,13 @@ const signIn = async (token, user) => {
 		return result;
 	}
 
+	//发送api登录日志
 	try {
 		apiLog = await axios.post(
 			url_apiLog,
 			{},
 			{
-				headers: {
-					"User-Agent": ua,
-					"Flysource-sign": sign_apiLog,
-					Authorization: authorization,
-					"Flysource-Auth": "bearer " + token,
-				},
+				headers: createHeaders(token, url_apiLog),
 			}
 		);
 		console.log("发送API日志成功:", apiLog.data.code);
@@ -155,9 +176,10 @@ const signIn = async (token, user) => {
 		return result;
 	}
 
+	// 发送签到请求
 	try {
-		const response = await axios.post(url_login, payload, {
-			headers: createHeaders(token, signature),
+		const response = await axios.post(url_sign, payload, {
+			headers: createHeaders(token, url_sign),
 		});
 		if (
 			response.status === 200 &&
@@ -172,43 +194,12 @@ const signIn = async (token, user) => {
 		}
 		result.attempts.push(`${response.data.msg}`);
 	} catch (error) {
+		console.error(`${user.username}:签到失败:`, error);
 		result.attempts.push(`${error.message}`);
 	}
 
 	return result;
 };
-
-// 签名生成函数
-const generateSignature = (token) => {
-	const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
-	const timestamp = Date.now();
-	return (
-		md5(sign_key + md5(timestamp + token.slice(0, 10))) + "1." + btoa(timestamp)
-	);
-};
-
-// 创建请求头
-const createHeaders = (token, signature) => ({
-	"FlySource-Auth": `bearer ${token}`,
-	"User-Agent": ua,
-	"FlySource-sign": signature,
-});
-
-// 创建负载数据
-const createPayload = (user, lat, lng) => ({
-	taskId: termId,
-	signAddress: "宿舍楼",
-	locationAccuracy: 7.8,
-	signLat: lat,
-	signLng: lng,
-	signType: 0,
-	fileId: "",
-	imgBase64: "/static/images/dormitory/photo.png",
-	signDate: getCurrentDate(),
-	signTime: getCurrentTime(),
-	signWeek: "星期" + getCurrentWeekday(),
-	scanCode: "",
-});
 
 // 主执行函数
 const main = async () => {
